@@ -877,6 +877,15 @@ class HTMLTranslator(nodes.NodeVisitor):
         node.children[:] = []
         self._stack(tag, node)
 
+    def visit_Html5Options(self, node):
+        attrs = {
+                'class': 'rst2html5-html5options',
+                'style': 'display:none',
+                'data-options': node.astext(),
+        }
+        tag = Div(**attrs)
+        self._stack(tag, node)
+
     def unknown_visit(self, node):
         nodename = node.__class__.__name__
 

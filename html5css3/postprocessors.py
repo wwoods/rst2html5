@@ -126,8 +126,6 @@ def add_js(tree, embed=True, params=None):
         body.append(js_fullpath(path, embed))
 
 def revealjs(tree, embed=True, params=None):
-    import json
-
     head = tree[0]
     body = tree[1]
     params = params or {}
@@ -139,7 +137,7 @@ def revealjs(tree, embed=True, params=None):
         return join_path("thirdparty", "revealjs", *args)
 
     if theme_base_dir:
-        theme_path = join_path(os.path.expanduser(theme_base_dir), theme_name)
+        theme_path = join_path(os.path.abspath(os.path.expanduser(theme_base_dir)), theme_name)
     else:
         theme_path = path("css", "theme", theme_name)
 
@@ -227,6 +225,24 @@ def revealjs(tree, embed=True, params=None):
     body.append(js(path("js", "reveal.js"), embed))
 
     head.append(css("rst2html5-reveal.css", embed))
+
+    for c in tree.findall(".//div[@class='rst2html5-html5options']"):
+        opts = c.get('data-options')
+        if not opts.startswith('revealjs:'):
+            continue
+        opts = opts[9:]
+        for keyval in opts.split(','):
+            if '=' not in keyval:
+                continue
+            k, v = keyval.split('=')
+            k = k.strip()
+            v = v.strip()
+            try:
+                v = json.loads(v)
+            except ValueError:
+                # Leave as string
+                pass
+            params[k] = v
 
     params['history'] = True
     param_s = json.dumps(params)
@@ -401,6 +417,18 @@ PROCESSORS = [
         "processor": add_js
     })
 ]
+
+
+class Html5Options(nodes.Inline, nodes.TextElement): pass
+class RevealJsOpts(Directive):
+    required_arguments = 1
+    optional_arguments = 0
+    final_argument_whitespace = False
+    has_content = False
+
+    def run(self):
+        return [Html5Options('', 'revealjs:' + self.arguments[0])]
+directives.register_directive('reveal-js-opts', RevealJsOpts)
 
 class Code(Directive):
     required_arguments = 1
