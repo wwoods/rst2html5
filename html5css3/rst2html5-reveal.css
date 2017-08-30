@@ -5,3 +5,11 @@ body.reveal {
 .hide-title>header{
  display: none
 }
+
+/* Prevent extra slide from printing due to MathJax incompatability */
+@media print {
+  body > #aria-status-div {
+    display: none;
+  }
+}
+
