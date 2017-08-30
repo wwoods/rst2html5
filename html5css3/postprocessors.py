@@ -152,6 +152,36 @@ def revealjs(tree, embed=True, params=None):
 
     body.append(slides)
 
+    # Any headings that are second-level shall become vertical slides
+    for slide_body in tree.findall("./body/div[@class='slides']"):
+        for vertical_header in list(slide_body.findall('./section')):
+            if not vertical_header.findall('./header/h2'):
+                # Not a top-level slide
+                continue
+
+            if not vertical_header.findall('./section/header/h3'):
+                # Has no vertical slides
+                continue
+
+            slides = [vertical_header]
+            for c in vertical_header[:]:
+                if c.tag != 'section':
+                    continue
+                vertical_header.remove(c)
+                slides.append(c)
+            new_slide = html.Section()
+            new_slide.extend(slides)
+
+            old_index = slide_body[:].index(vertical_header)
+            slide_body.remove(vertical_header)
+            slide_body.insert(old_index, new_slide)
+
+            # Other section headings, convert to div
+            for c in new_slide:
+                for cc in c:
+                    if cc.tag == 'section':
+                        cc.tag = 'div'
+
     # <link rel="stylesheet" href="css/reveal.css">
     # <link rel="stylesheet" href="css/theme/default.css" id="theme">
     head.append(css(path("css", "reveal.css"), embed))
@@ -171,6 +201,22 @@ def revealjs(tree, embed=True, params=None):
                         printStyle.type = 'text/css';
                         printStyle.innerHTML = {};
                         document.getElementsByTagName( 'head' )[0].appendChild( printStyle );
+
+                        //Fix for slide numbers...
+                        function trySet() {{
+                            if (typeof Reveal === "undefined") {{
+                                return;
+                            }}
+
+                            clearInterval(trySet_id);
+                            if (Reveal.getConfig().slideNumber !== 'c') return;
+
+                            console.log("WOOOOO");
+                            $('.slide-number.slide-number-pdf').each(function(idx, el) {{
+                                el.innerHTML = idx+1;
+                            }});
+                        }}
+                        var trySet_id = setInterval(trySet, 100);
                     }}
                 }})();
                 """.format(css_print))

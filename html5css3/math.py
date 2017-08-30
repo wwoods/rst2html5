@@ -95,7 +95,7 @@ class MathJaxMathHandler(SimpleMathHandler):
     BLOCK_WRAPPER = '\\begin{%(env)s}\n%(code)s\n\\end{%(env)s}'
     INLINE_WRAPPER = '\(%(code)s\)'
 
-    DEFAULT_URL = 'http://cdn.mathjax.org/mathjax/latest/MathJax.js'
+    DEFAULT_URL = 'http://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.2/MathJax.js'
     DEFAULT_CONFIG = """
         MathJax.Hub.Config({
             extensions: ["tex2jax.js"],
