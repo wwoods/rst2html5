@@ -224,9 +224,8 @@ def bootstrap_css(tree, embed=True, params=None):
     head.append(css(join_path("thirdparty", "bootstrap.css"), embed))
 
 def embed_images(tree, embed=True, params=None):
-    import base64
-    for image in tree.findall(".//img"):
-        path = image.attrib['src']
+    import base64, re
+    def image_to_data(path):
         lowercase_path = path.lower()
 
         if lowercase_path.endswith(".png"):
@@ -236,11 +235,25 @@ def embed_images(tree, embed=True, params=None):
         elif lowercase_path.endswith(".gif"):
             content_type = "image/gif"
         else:
-            continue
+            return path
 
         encoded = base64.b64encode(open(path, 'rb').read()).decode('utf-8')
         content = "data:%s;base64,%s" % (content_type, encoded)
-        image.set('src', content)
+        return content
+
+    for image in tree.findall(".//img"):
+        path = image.attrib['src']
+        image.set('src', image_to_data(path))
+
+    for style in tree.findall(".//style"):
+        def embed_stylesheet_image(match):
+            path = match.group(2)
+            print("TODO: no hardcoded theme/")
+            print("REPLACING " + match.group(0))
+            return 'url({})'.format(image_to_data('theme/' + path))
+
+        style.text = re.sub(r'''(url\(['"])([^'"]+)(['"]\))''', 
+                embed_stylesheet_image, style.text)
 
 def pygmentize(tree, embed=True, params=None):
     from pygments import highlight
