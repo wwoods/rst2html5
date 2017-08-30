@@ -295,6 +295,8 @@ def embed_images(tree, embed=True, params=None):
             content_type = "image/jpg"
         elif lowercase_path.endswith(".gif"):
             content_type = "image/gif"
+        elif lowercase_path.endswith(".svg"):
+            content_type = "image/svg+xml"
         else:
             return path
 
@@ -311,10 +313,16 @@ def embed_images(tree, embed=True, params=None):
             path = match.group(2)
             print("TODO: no hardcoded theme/")
             print("REPLACING " + match.group(0))
-            return 'url({})'.format(image_to_data('theme/' + path))
+            return 'url({})'.format(image_to_data('../theme/' + path))
 
         style.text = re.sub(r'''(url\(['"])([^'"]+)(['"]\))''', 
                 embed_stylesheet_image, style.text)
+
+    for object in tree.findall(".//object[@type='image/svg+xml']"):
+        path = object.attrib['data']
+        if path.startswith('data:'): continue
+
+        object.set('data', image_to_data(path))
 
 def pygmentize(tree, embed=True, params=None):
     from pygments import highlight
