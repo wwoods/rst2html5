@@ -153,14 +153,12 @@ def revealjs(tree, embed=True, params=None):
     # Any headings that are second-level shall become vertical slides
     for slide_body in tree.findall("./body/div[@class='slides']"):
         for vertical_header in list(slide_body.findall('./section')):
-            if not vertical_header.findall('./header/h2'):
-                # Not a top-level slide
-                continue
+            # Turn sections into divs to not confuse reveal.js
+            for c in vertical_header.findall('.//section'):
+                c.tag = 'div'
+            continue
 
-            if not vertical_header.findall('./section/header/h3'):
-                # Has no vertical slides
-                continue
-
+            # TODO: .. vertical-slides:: directive
             slides = [vertical_header]
             for c in vertical_header[:]:
                 if c.tag != 'section':
