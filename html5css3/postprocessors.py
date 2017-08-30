@@ -211,7 +211,6 @@ def revealjs(tree, embed=True, params=None):
                             clearInterval(trySet_id);
                             if (Reveal.getConfig().slideNumber !== 'c') return;
 
-                            console.log("WOOOOO");
                             $('.slide-number.slide-number-pdf').each(function(idx, el) {{
                                 el.innerHTML = idx+1;
                             }});
