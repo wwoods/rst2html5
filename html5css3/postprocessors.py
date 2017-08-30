@@ -290,7 +290,7 @@ def mathjax(tree, embed=True, params=None):
     body = tree[1]
     params = params or {}
     config_path = params.get("config")
-    url = params.get("url", "http://cdn.mathjax.org/mathjax/latest/MathJax.js")
+    url = params.get("url", "http://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.2/MathJax.js")
 
 
     if config_path is None:
