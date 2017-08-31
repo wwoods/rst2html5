@@ -137,6 +137,13 @@ def add_js(tree, embed=True, params=None):
     for path in paths:
         body.append(js_fullpath(path, embed))
 
+def link_to_new(tree, embed=True, params=None):
+    # Rewrite all links to open in a new tab
+    for link in tree.findall(".//a"):
+        if 'internal' in link.get("class").lower().split(' '):
+            continue
+        link.set("target", "_blank")
+
 def revealjs(tree, embed=True, params=None):
     head = tree[0]
     body = tree[1]
@@ -170,7 +177,7 @@ def revealjs(tree, embed=True, params=None):
 
     body.append(slides)
 
-    # Any headings that are second-level shall become vertical slides
+    # Allow the 'slide-group' class to create vertical slide groups
     for slide_body in tree.findall("./body/div[@class='slides']"):
         curgroup = None
         for slide in list(slide_body.findall('./section')):
@@ -193,7 +200,6 @@ def revealjs(tree, embed=True, params=None):
             slide_body.insert(list(slide_body).index(slide), curgroup)
             slide_body.remove(slide)
             curgroup.append(slide)
-
 
     # <link rel="stylesheet" href="css/reveal.css">
     # <link rel="stylesheet" href="css/theme/default.css" id="theme">
@@ -438,6 +444,10 @@ PROCESSORS = [
     ("add_js", {
         "name": "add js files",
         "processor": add_js
+    }),
+    ("link_to_new", {
+        "name": "change <a> links to target a new tab or window",
+        "processor": link_to_new
     })
 ]
 
