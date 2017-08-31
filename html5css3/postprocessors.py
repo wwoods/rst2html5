@@ -185,6 +185,13 @@ def revealjs(tree, embed=True, params=None):
             for c in slide.findall('.//section'):
                 c.tag = 'div'
 
+            # Steal hyperlinks to this section in a way reveal.js understands
+            if (slide[0].tag == 'span'
+                    and 'id' in slide[0].attrib
+                    and len(slide[0]) == 0):
+                slide.attrib['id'] = slide[0].attrib['id']
+                slide.remove(slide[0])
+
             if ('slide-group' not in
                     (slide.get("class") or "").lower().split(' ')):
 
