@@ -548,12 +548,8 @@ class HTMLTranslator(nodes.NodeVisitor):
         """
         Link/embed CSS file.
         """
-        if self.settings.embed_content:
-            content = codecs.open(path, 'r', encoding='utf8').read()
-            tag = Style(content, type="text/css")
-        else:
-            tag = Link(href=path, rel="stylesheet", type_="text/css")
-        self.head.append(tag)
+        self.head.append(postprocessors.css(os.path.abspath(path), 
+                embed=self.settings.embed_content))
 
     def js(self, path):
         content = open(path).read().decode('utf-8')

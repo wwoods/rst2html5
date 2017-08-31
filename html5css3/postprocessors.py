@@ -2,6 +2,12 @@ from __future__ import absolute_import
 import os
 import sys
 
+try:
+    from scss import Compiler as ScssCompiler
+    has_scss = True
+except ImportError:
+    has_scss = False
+
 import html5css3
 import json
 from . import html
@@ -46,6 +52,12 @@ def js(path, embed=True):
 
 def css(path, embed=True):
     content = read_file(abspath(path))
+
+    if path.endswith('.scss'):
+        if not has_scss:
+            raise ValueError("Please install pyscss for scss support")
+
+        content = ScssCompiler().compile_string(content)
 
     if embed:
         return html.Style(content, type="text/css")
@@ -129,7 +141,7 @@ def revealjs(tree, embed=True, params=None):
     head = tree[0]
     body = tree[1]
     params = params or {}
-    theme_name = params.pop("theme", "league") + ".css"
+    theme_name = params.pop("theme", "league")
     theme_base_dir = params.pop("themepath", None)
     printpdf = params.pop("printpdf", False)
 
@@ -140,6 +152,14 @@ def revealjs(tree, embed=True, params=None):
         theme_path = join_path(os.path.abspath(os.path.expanduser(theme_base_dir)), theme_name)
     else:
         theme_path = path("css", "theme", theme_name)
+
+    if os.path.lexists(theme_path + '.scss'):
+        theme_path += '.scss'
+    elif os.path.lexists(theme_path + '.css'):
+        theme_path += '.css'
+    else:
+        raise ValueError("Could not find reveal.js theme at {}".format(
+                theme_path))
 
     add_class(body, "reveal")
     slides = html.Div(class_="slides")
