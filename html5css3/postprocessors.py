@@ -15,7 +15,7 @@ from . import html
 IS_PY3 = sys.version[0] == '3'
 
 from docutils import nodes
-from docutils.parsers.rst import directives
+from docutils.parsers.rst import directives, roles
 from docutils.parsers.rst import Directive
 
 BASE_PATH = os.path.dirname(__file__)
@@ -140,7 +140,7 @@ def add_js(tree, embed=True, params=None):
 def link_to_new(tree, embed=True, params=None):
     # Rewrite all links to open in a new tab
     for link in tree.findall(".//a"):
-        if 'internal' in link.get("class").lower().split(' '):
+        if 'internal' in (link.get("class") or "").lower().split(' '):
             continue
         link.set("target", "_blank")
 
@@ -450,6 +450,16 @@ PROCESSORS = [
         "processor": link_to_new
     })
 ]
+
+
+class Html5Ref(nodes.Inline, nodes.TextElement): pass
+def ref_role(name, rawtext, text, lineno, inliner, options={}, content=[]):
+    opts = {
+            'pretty-ref': 'yes',
+    }
+    opts.update(options)
+    return [nodes.reference(rawtext, '', refid=text, **opts)], []#Html5Ref(rawtext, text)], []
+roles.register_local_role('ref', ref_role)
 
 
 class Html5Options(nodes.Inline, nodes.TextElement): pass

@@ -721,12 +721,44 @@ class HTMLTranslator(nodes.NodeVisitor):
                    'References must have "refuri" or "refid" attribute.'
             atts['href'] = '#' + node['refid']
             atts['class'] += ' internal'
+
+            if 'pretty-ref' in node:
+                tag.text = self._resolve_ref(node, node['refid'])
         if not isinstance(node.parent, nodes.TextElement):
             assert len(node) == 1 and isinstance(node[0], nodes.image)
             atts['class'] += ' image-reference'
 
         tag.attrib.update(atts)
         self._stack(tag, node)
+
+    def _resolve_ref(self, some_node, refid):
+        if not hasattr(self, '_resolved_refs'):
+            self._resolved_refs = {}
+
+            n = some_node
+            while n.parent is not None:
+                n = n.parent
+
+            stack = [n]
+            while stack:
+                n = stack.pop()
+                stack.extend(n.children)
+
+                if len(n.children) > 0:
+                    text = n.children[0].astext()
+                else:
+                    continue
+
+                ids = [] if 'ids' not in n else n['ids']
+                for i in ids:
+                    if i in self._resolved_refs:
+                        raise ValueError("Duplicate id: {}".format(i))
+
+                    self._resolved_refs[i] = text
+
+
+        return self._resolved_refs.get(refid, '<<No such id: {}>>'.format(
+                refid))
 
     def visit_citation_reference(self, node):
         tag = A(href='#' + node['refid'], class_="citation-reference")
