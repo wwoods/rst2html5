@@ -172,31 +172,28 @@ def revealjs(tree, embed=True, params=None):
 
     # Any headings that are second-level shall become vertical slides
     for slide_body in tree.findall("./body/div[@class='slides']"):
-        for vertical_header in list(slide_body.findall('./section')):
-            # Turn sections into divs to not confuse reveal.js
-            for c in vertical_header.findall('.//section'):
+        curgroup = None
+        for slide in list(slide_body.findall('./section')):
+            # Turn nested sections into divs to not confuse reveal.js
+            for c in slide.findall('.//section'):
                 c.tag = 'div'
-            continue
 
-            # TODO: .. vertical-slides:: directive
-            slides = [vertical_header]
-            for c in vertical_header[:]:
-                if c.tag != 'section':
-                    continue
-                vertical_header.remove(c)
-                slides.append(c)
-            new_slide = html.Section()
-            new_slide.extend(slides)
+            if ('slide-group' not in
+                    (slide.get("class") or "").lower().split(' ')):
 
-            old_index = slide_body[:].index(vertical_header)
-            slide_body.remove(vertical_header)
-            slide_body.insert(old_index, new_slide)
+                # Add to existing group
+                if curgroup is not None:
+                    slide_body.remove(slide)
+                    curgroup.append(slide)
 
-            # Other section headings, convert to div
-            for c in new_slide:
-                for cc in c:
-                    if cc.tag == 'section':
-                        cc.tag = 'div'
+                continue
+
+            # Make everything until the next slide-group part of this class
+            curgroup = html.Section()
+            slide_body.insert(list(slide_body).index(slide), curgroup)
+            slide_body.remove(slide)
+            curgroup.append(slide)
+
 
     # <link rel="stylesheet" href="css/reveal.css">
     # <link rel="stylesheet" href="css/theme/default.css" id="theme">
