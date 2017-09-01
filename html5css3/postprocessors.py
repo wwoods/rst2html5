@@ -177,20 +177,23 @@ def revealjs(tree, embed=True, params=None):
 
     body.append(slides)
 
+    # Reveal.js only supports ids on the <section> tags; rst allows multiple
+    # ids per slide though, and implements them via child spans with the
+    # given id.  We fix this by saving all possible names of a slide when
+    # iterating, and then re-routing all hyperlinks.
+    anchor_to_slide = {}
+
     # Allow the 'slide-group' class to create vertical slide groups
     for slide_body in tree.findall("./body/div[@class='slides']"):
         curgroup = None
         for slide in list(slide_body.findall('./section')):
+            # Save anchors
+            for c in slide.findall('.//span[@id]'):
+                anchor_to_slide[c.get('id')] = slide
+
             # Turn nested sections into divs to not confuse reveal.js
             for c in slide.findall('.//section'):
                 c.tag = 'div'
-
-            # Steal hyperlinks to this section in a way reveal.js understands
-            if (slide[0].tag == 'span'
-                    and 'id' in slide[0].attrib
-                    and len(slide[0]) == 0):
-                slide.attrib['id'] = slide[0].attrib['id']
-                slide.remove(slide[0])
 
             if ('slide-group' not in
                     (slide.get("class") or "").lower().split(' ')):
@@ -207,6 +210,14 @@ def revealjs(tree, embed=True, params=None):
             slide_body.insert(list(slide_body).index(slide), curgroup)
             slide_body.remove(slide)
             curgroup.append(slide)
+
+    # Re-route links
+    for a in tree.findall(".//a"):
+        if not a.get('href').startswith('#'):
+            continue
+
+        slide = anchor_to_slide.get(a.get('href')[1:])
+        a.set('href', '#{}'.format(slide.get('id')) if slide else a.get('href'))
 
     # <link rel="stylesheet" href="css/reveal.css">
     # <link rel="stylesheet" href="css/theme/default.css" id="theme">
