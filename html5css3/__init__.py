@@ -412,7 +412,7 @@ NODES = {
     "field_name": (Td, "field-label"),
     "figure": Figure,
     "footer": skip, # TODO temporary skip
-    "footnote": None,
+    "footnote": (Div, "footnote"),
     "footnote_reference": None,
     "generated": skip,
     "header": skip, # TODO temporary skip
@@ -766,7 +766,7 @@ class HTMLTranslator(nodes.NodeVisitor):
 
     def visit_footnote_reference(self, node):
         href = '#' + node['refid']
-        tag = A(class_="footnote-reference", href=href)
+        tag = A(class_="internal footnote-reference", href=href)
 
         self._stack(tag, node)
 

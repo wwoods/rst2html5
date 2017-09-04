@@ -188,7 +188,7 @@ def revealjs(tree, embed=True, params=None):
         curgroup = None
         for slide in list(slide_body.findall('./section')):
             # Save anchors
-            for c in slide.findall('.//span[@id]'):
+            for c in slide.findall('.//*[@id]'):
                 anchor_to_slide[c.get('id')] = slide
 
             # Turn nested sections into divs to not confuse reveal.js
