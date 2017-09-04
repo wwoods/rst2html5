@@ -33,8 +33,8 @@ from . import html
 from .html import *
 # import default post processors so they register
 from . import postprocessors
-from .math import (HTMLMathHandler, LaTeXMathHandler, MathJaxMathHandler,
-                   MathMLMathHandler)
+from .math import (HTMLMathHandler, ImgMathHandler, LaTeXMathHandler, 
+                MathJaxMathHandler, MathMLMathHandler)
 
 
 if IS_PY3:
@@ -149,10 +149,13 @@ class Writer(writers.Writer):
           'Defined styles: "borderless". Default: ""',
           ['--table-style'],
           {'default': ''}),
-         ('Math output format, one of "MathML", "HTML", "MathJax" '
+         ('Math output format, one of "MathML", "HTML", "ImgMath", "MathJax" '
           'or "LaTeX". Default: "MathJax"',
           ['--math-output'],
           {'default': 'MathJax'}),
+         ('ImgMath font size (in pt).  It will render at 72DPI; if more required, specify a larger imgmath-size and use e.g. transform: scale(0.5) to downscale the final image.',
+          ['--imgmath-size'],
+          {'default': '12'}),
          ('MathJax JS URL.',
           ['--mathjax-url'],
           {'default': None}),
@@ -502,6 +505,13 @@ class HTMLTranslator(nodes.NodeVisitor):
         if name == 'html':
             option = self.settings.math_css or option
             self.math_handler = HTMLMathHandler(css_filename=option)
+        elif name == 'imgmath':
+            if option:
+                raise ValueError('Math handler "{}" does not support '
+                        'option "{}"; instead, try "--imgmath-size".'.format(
+                            name, option))
+            font_size = int(self.settings.imgmath_size)
+            self.math_handler = ImgMathHandler(font_size)
         elif name == 'mathml':
             if option:
                 raise ValueError(('Math handler "%s" does not support ' +

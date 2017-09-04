@@ -11,7 +11,13 @@ Math handling for ``html5css3``.
 from __future__ import unicode_literals
 
 import codecs
+import hashlib
 import os.path
+import re
+import shutil
+import struct
+import subprocess
+import tempfile
 
 from docutils.utils.math.unichar2tex import uni2tex_table
 from docutils.utils.math import math2html, pick_math_environment
@@ -83,6 +89,195 @@ class LaTeXMathHandler(SimpleMathHandler):
     CLASS = 'math'
     BLOCK_WRAPPER = '%(code)s'
     INLINE_WRAPPER = '%(code)s'
+
+
+class ImgMathHandler(MathHandler):
+    """Mostly taken from sphinx.ext.math; renders LaTeX math expressions to
+    an image and embeds it.
+    """
+    IMAGE_FORMAT = 'png'
+    FONT_SIZE = 12
+
+    DOC_HEAD = r'''
+\documentclass[12pt]{article}
+\usepackage[utf8x]{inputenc}
+\usepackage{amsmath}
+\usepackage{amsthm}
+\usepackage{amssymb}
+\usepackage{amsfonts}
+\usepackage{anyfontsize}
+\usepackage{bm}
+\pagestyle{empty}
+'''
+
+    PREAMBLE = r''
+
+    DOC_BODY = r'''
+\begin{document}
+\fontsize{%d}{%d}\selectfont %s%%
+\end{document}
+'''
+
+    DOC_BODY_PREVIEW = r'''
+\usepackage[active]{preview}
+\begin{document}
+\begin{preview}
+\fontsize{%s}{%s}\selectfont %s%%
+\end{preview}
+\end{document}
+'''
+
+    def __init__(self, font_size=FONT_SIZE):
+        super().__init__()
+
+        self.FONT_SIZE = font_size
+
+
+    def _create_tag(self, code, block):
+        size, imgdata = self._render_math(code, block)
+
+        cls = []
+        if block:
+            cls.append('imgmath-block')
+        else:
+            cls.append('imgmath-inline')
+        dim_style = "width:{}mm;height:{}mm".format(size[0] * 0.3528,
+                size[1] * 0.3528)
+
+        tag = Img(src=imgdata, class_=' '.join(cls), style=dim_style)
+        if size[2] is not None:
+            # Add depth information, align with text
+            tag.attrib['style'] += (";bottom:{}mm".format(
+                    -size[2] * 0.3528)) # (size[1] - size[2]) * 0.3528 - 3.8))
+
+        if not block:
+            # Don't distort text lines
+            container = Span(class_='imgmath-inline-container',
+                    style="width:{}mm".format(size[0] * 0.3528))
+            # Images are weird
+            container2 = Span(style=dim_style)
+            container2.append(tag)
+            container.append(container2)
+            tag = container
+
+        return tag
+
+    def _render_math(self, code, block, use_preview=True):
+        """Returns ((width in pt, height in pt, depth in pt), embedded image 
+                data for src tag).
+        """
+        import base64
+        import binascii
+
+        fmt = self.IMAGE_FORMAT
+        if fmt not in ('png', 'svg'):
+            raise ValueError('Must be "png" or "svg": {}'.format(fmt))
+
+        font_size = self.FONT_SIZE
+        if fmt == 'png':
+            # Scale up, as png can be low DPI otherwise
+            png_upscale = 4
+            font_size *= png_upscale
+
+        body = self.DOC_BODY if not use_preview else self.DOC_BODY_PREVIEW
+
+        if not block:
+            math = '${}$'.format(code)
+        else:
+            # Very loosely from sphinx.ext.mathbase.wrap_displaymath
+            math = (r'\begin{{equation*}}\begin{{split}}'
+                    r'{}\end{{split}}\end{{equation*}}'.format(code))
+
+        latex = [self.DOC_HEAD, self.PREAMBLE]
+        latex.append(body % (font_size, int(round(font_size * 1.2)), math))
+        latex = '\n'.join(latex)
+        shasum = "{}.{}".format(hashlib.sha1(latex.encode('utf-8')).hexdigest(),
+                fmt)
+
+        def run_cmd(cmd):
+            """Returns stdout"""
+            p = subprocess.Popen(cmd, stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE)
+            stdout, stderr = p.communicate()
+
+            stdout = stdout.decode('utf-8')
+            stderr = stderr.decode('utf-8')
+
+            if p.returncode != 0:
+                raise ValueError("Latex exited with error:\n\nSTDOUT:\n{}\n\n"
+                        "STDERR:\n{}".format(stdout, stderr))
+            return stdout
+
+        # Do building in a temp directory
+        tmp = tempfile.mkdtemp(prefix='{}-'.format(shasum))
+        olddir = os.getcwd()
+        os.chdir(tmp)
+        try:
+            with open(os.path.join(tmp, 'math.tex'), 'w') as f:
+                f.write(latex)
+            latex_cmd = ['latex', '--interaction=nonstopmode', 'math.tex']
+            run_cmd(latex_cmd)
+
+            if fmt == 'png':
+                cmd = ['dvipng', '--width', '--height', '-T', 'tight', 'z9', '-o', 'math.png', 'math.dvi']
+                if use_preview:
+                    cmd.append('--depth')
+                output = 'math.png'
+                content_header = 'data:image/png;base64,'
+                def get_dims(stdout):
+                    """Should return (width in pt, height in pt, depth in pt)."""
+                    dims = stdout.split('\n[')
+                    if len(dims) < 2:
+                        raise ValueError("Bad output, no width and height? {}".format(stdout))
+
+                    w = re.search(r'width=-?(\d+)', dims[1])
+                    if w is None:
+                        raise ValueError("No width? {}".format(dims[1]))
+                    w = int(w.group(1))
+
+                    h = re.search(r'height=-?(\d+)', dims[1])
+                    if h is None:
+                        raise ValueError("No height? {}".format(dims[1]))
+                    h = int(h.group(1))
+
+                    if use_preview:
+                        d = re.search(r'depth=(-?\d+)', dims[1])
+                        if d is None:
+                            raise ValueError("No depth? {}".format(dims[1]))
+                        d = int(d.group(1))
+
+                    # Must add depth to height to get real height.
+                    h = h + d
+
+                    # Already in pt, default at 72 dpi
+                    # Was double-size rendered
+                    return (
+                            w * 1. / png_upscale,
+                            h * 1. / png_upscale,
+                            d * 1. / png_upscale,
+                    )
+
+                cmd_out = run_cmd(cmd)
+                dims = get_dims(cmd_out)
+            elif fmt == 'svg':
+                raise NotImplementedError("Looks bad, broken use_preview...")
+                cmd = ['dvisvgm', '-o', 'math.svg', 'math.dvi']
+                output = 'math.svg'
+                content_header = 'data:image/svg+xml;base64,'
+
+                cmd_out = run_cmd(cmd)
+                raise NotImplementedError("Cannot get height.")
+            else:
+                raise NotImplementedError(fmt)
+
+            with open(output, 'rb') as f:
+                content = f.read()
+
+            return dims, '{}{}'.format(content_header,
+                    base64.b64encode(content).decode('utf-8'))
+        finally:
+            os.chdir(olddir)
+            shutil.rmtree(tmp)
 
 
 class MathJaxMathHandler(SimpleMathHandler):
