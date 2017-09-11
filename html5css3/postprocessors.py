@@ -393,7 +393,7 @@ def embed_images(tree, embed=True, params=None):
                 object.set('data', await image_to_data(path))
             tasks.append(do_encode())
 
-        await asyncio.wait(tasks)
+        tasks and await asyncio.wait(tasks)
     # Make an event loop for this plugin
     asyncio.get_event_loop().run_until_complete(main())
 

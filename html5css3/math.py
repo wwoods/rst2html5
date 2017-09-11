@@ -138,7 +138,7 @@ class ImgMathHandler(MathHandler):
 
 
     def finalize(self):
-        asyncio.get_event_loop().run_until_complete(
+        self._async_tasks and asyncio.get_event_loop().run_until_complete(
                 asyncio.wait(self._async_tasks))
         self._async_tasks = []
 
