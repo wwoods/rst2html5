@@ -717,7 +717,8 @@ class HTMLTranslator(nodes.NodeVisitor):
         pass
 
     def depart_document(self, node):
-        pass
+        if hasattr(self.math_handler, 'finalize'):
+            self.math_handler.finalize()
 
     def visit_reference(self, node):
         tag = A()
@@ -848,6 +849,8 @@ class HTMLTranslator(nodes.NodeVisitor):
             '.swf': 'application/x-shockwave-flash'
         }
 
+        embed = self.document.settings.embed_images
+
         ext = os.path.splitext(uri)[1].lower()
 
         if ext in ('.svg', '.swf'):
@@ -897,7 +900,12 @@ class HTMLTranslator(nodes.NodeVisitor):
             atts['class'] = 'align-%s' % node['align']
 
         if ext in ('.svg', '.swf'): # place in an object element,
-            tag = Object(node.get('alt', uri))
+            if not embed:
+                tag = Object(node.get('alt', uri))
+            else:
+                tag = Img()
+                atts['src'] = atts.pop('data')
+                atts.pop('type')
         else:
             tag = Img()
 

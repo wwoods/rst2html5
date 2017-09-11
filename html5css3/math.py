@@ -10,6 +10,7 @@ Math handling for ``html5css3``.
 
 from __future__ import unicode_literals
 
+import asyncio
 import codecs
 import hashlib
 import os.path
@@ -132,38 +133,54 @@ class ImgMathHandler(MathHandler):
 
         self.FONT_SIZE = font_size
 
+        self._async_tasks = []
+
+
+    def finalize(self):
+        asyncio.get_event_loop().run_until_complete(
+                asyncio.wait(self._async_tasks))
+        self._async_tasks = []
+
 
     def _create_tag(self, code, block):
-        size, imgdata = self._render_math(code, block)
 
         cls = []
         if block:
             cls.append('imgmath-block')
         else:
             cls.append('imgmath-inline')
-        dim_style = "width:{}mm;height:{}mm".format(size[0] * 0.3528,
-                size[1] * 0.3528)
-
-        tag = Img(src=imgdata, class_=' '.join(cls), style=dim_style)
-        if size[2] is not None:
-            # Add depth information, align with text
-            tag.attrib['style'] += (";bottom:{}mm".format(
-                    -size[2] * 0.3528)) # (size[1] - size[2]) * 0.3528 - 3.8))
+        mathtag = tag = Img(class_=' '.join(cls))
+        container = None
 
         if not block:
             # Don't distort text lines
-            container = Span(class_='imgmath-inline-container',
-                    style="width:{}mm".format(size[0] * 0.3528))
+            container = Span(class_='imgmath-inline-container')
             # Images are weird
-            container2 = Span(style=dim_style)
+            container2 = Span()
             container2.append(tag)
             container.append(container2)
             tag = container
 
+        async def render_inner():
+            size, imgdata = await self._render_math(code, block)
+            mathtag.attrib['src'] = imgdata
+
+            dim_style = "width:{}mm;height:{}mm".format(size[0] * 0.3528,
+                    size[1] * 0.3528)
+            mathtag.attrib['style'] = dim_style
+            if container is not None:
+                container.attrib['style'] = "width:{}mm".format(size[0] * 0.3528)
+                container2.attrib['style'] = dim_style
+            if size[2] is not None:
+                # Add depth information, align with text
+                mathtag.attrib['style'] += (";bottom:{}mm".format(
+                        -size[2] * 0.3528)) # (size[1] - size[2]) * 0.3528 - 3.8))
+        self._async_tasks.append(render_inner())
+
         return tag
 
-    def _render_math(self, code, block, use_preview=True):
-        """Returns ((width in pt, height in pt, depth in pt), embedded image 
+    async def _render_math(self, code, block, use_preview=True):
+        """Returns ((width in pt, height in pt, depth in pt), embedded image
                 data for src tag).
         """
         import base64
@@ -194,29 +211,29 @@ class ImgMathHandler(MathHandler):
         shasum = "{}.{}".format(hashlib.sha1(latex.encode('utf-8')).hexdigest(),
                 fmt)
 
-        def run_cmd(cmd):
+        async def run_cmd(cmd, working_dir):
             """Returns stdout"""
-            p = subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE)
-            stdout, stderr = p.communicate()
+            p = await asyncio.create_subprocess_exec(*cmd,
+                    cwd=working_dir,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE)
+            stdout, stderr = await p.communicate()
 
             stdout = stdout.decode('utf-8')
             stderr = stderr.decode('utf-8')
 
             if p.returncode != 0:
-                raise ValueError("Latex exited with error:\n\nSTDOUT:\n{}\n\n"
-                        "STDERR:\n{}".format(stdout, stderr))
+                raise ValueError(f"Latex exited with error:\n\nSTDOUT:\n{stdout}\n\n"
+                        "STDERR:\n{stderr}")
             return stdout
 
         # Do building in a temp directory
         tmp = tempfile.mkdtemp(prefix='{}-'.format(shasum))
-        olddir = os.getcwd()
-        os.chdir(tmp)
         try:
             with open(os.path.join(tmp, 'math.tex'), 'w') as f:
                 f.write(latex)
             latex_cmd = ['latex', '--interaction=nonstopmode', 'math.tex']
-            run_cmd(latex_cmd)
+            await run_cmd(latex_cmd, tmp)
 
             if fmt == 'png':
                 cmd = ['dvipng', '--width', '--height', '-T', 'tight', 'z9', '-o', 'math.png', 'math.dvi']
@@ -257,7 +274,7 @@ class ImgMathHandler(MathHandler):
                             d * 1. / png_upscale,
                     )
 
-                cmd_out = run_cmd(cmd)
+                cmd_out = await run_cmd(cmd, tmp)
                 dims = get_dims(cmd_out)
             elif fmt == 'svg':
                 raise NotImplementedError("Looks bad, broken use_preview...")
@@ -265,18 +282,17 @@ class ImgMathHandler(MathHandler):
                 output = 'math.svg'
                 content_header = 'data:image/svg+xml;base64,'
 
-                cmd_out = run_cmd(cmd)
+                cmd_out = await run_cmd(cmd, tmp)
                 raise NotImplementedError("Cannot get height.")
             else:
                 raise NotImplementedError(fmt)
 
-            with open(output, 'rb') as f:
+            with open(os.path.join(tmp, output), 'rb') as f:
                 content = f.read()
 
             return dims, '{}{}'.format(content_header,
                     base64.b64encode(content).decode('utf-8'))
         finally:
-            os.chdir(olddir)
             shutil.rmtree(tmp)
 
 

@@ -11,6 +11,8 @@ except ImportError:
 import html5css3
 import json
 from . import html
+import subprocess
+import tempfile
 
 IS_PY3 = sys.version[0] == '3'
 
@@ -324,44 +326,76 @@ def bootstrap_css(tree, embed=True, params=None):
     head.append(css(join_path("thirdparty", "bootstrap.css"), embed))
 
 def embed_images(tree, embed=True, params=None):
-    import base64, re
-    def image_to_data(path):
+    import asyncio, base64, re
+
+    async def image_to_pngdata(path):
+        d = tempfile.NamedTemporaryFile(suffix='.png', delete=False)
+        d.close()
+        try:
+            proc = await asyncio.create_subprocess_exec(['inkscape', '-z',
+                    '--export-png', d.name, '-d', '150',
+                    path], stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE)
+            stdout, stderr = await proc.communicate()
+            if proc.returncode != 0:
+                raise ValueError(f"Process exited with {proc.returncode}:\n\n"
+                        "{stdout}\n\n{stderr}")
+            return open(d.name, 'rb').read()
+        finally:
+            os.unlink(d.name)
+    async def image_to_data(path):
         lowercase_path = path.lower()
 
         if lowercase_path.endswith(".png"):
             content_type = "image/png"
+            imgdata = open(path, 'rb').read()
         elif lowercase_path.endswith(".jpg"):
             content_type = "image/jpg"
+            imgdata = open(path, 'rb').read()
         elif lowercase_path.endswith(".gif"):
             content_type = "image/gif"
+            imgdata = open(path, 'rb').read()
         elif lowercase_path.endswith(".svg"):
-            content_type = "image/svg+xml"
+            content_type = "image/png"
+            imgdata = await image_to_pngdata(path)
         else:
             return path
 
-        encoded = base64.b64encode(open(path, 'rb').read()).decode('utf-8')
+        encoded = base64.b64encode(imgdata).decode('utf-8')
         content = "data:%s;base64,%s" % (content_type, encoded)
         return content
 
-    for image in tree.findall(".//img"):
-        path = image.attrib['src']
-        image.set('src', image_to_data(path))
+    async def main():
+        tasks = []
+        for image in tree.findall(".//img"):
+            path = image.attrib['src']
+            async def waiter():
+                image.set('src', await image_to_data(path))
+            tasks.append(waiter())
 
-    for style in tree.findall(".//style"):
-        def embed_stylesheet_image(match):
-            path = match.group(2)
-            print("TODO: no hardcoded theme/")
-            print("REPLACING " + match.group(0))
-            return 'url({})'.format(image_to_data('../theme/' + path))
+        """
+        for style in tree.findall(".//style"):
+            def embed_stylesheet_image(match):
+                path = match.group(2)
+                print("TODO: no hardcoded theme/")
+                print("REPLACING " + match.group(0))
+                return 'url({})'.format(image_to_data('../theme/' + path))
 
-        style.text = re.sub(r'''(url\(['"])([^'"]+)(['"]\))''', 
-                embed_stylesheet_image, style.text)
+            style.text = re.sub(r'''(url\(['"])([^'"]+)(['"]\))''',
+                    embed_stylesheet_image, style.text)
+        """
 
-    for object in tree.findall(".//object[@type='image/svg+xml']"):
-        path = object.attrib['data']
-        if path.startswith('data:'): continue
+        for object in tree.findall(".//object[@type='image/svg+xml']"):
+            path = object.attrib['data']
+            if path.startswith('data:'): continue
 
-        object.set('data', image_to_data(path))
+            async def do_encode():
+                object.set('data', await image_to_data(path))
+            tasks.append(do_encode())
+
+        await asyncio.wait(tasks)
+    # Make an event loop for this plugin
+    asyncio.get_event_loop().run_until_complete(main())
 
 def pygmentize(tree, embed=True, params=None):
     from pygments import highlight
