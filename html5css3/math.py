@@ -100,7 +100,7 @@ class ImgMathHandler(MathHandler):
     FONT_SIZE = 12
 
     DOC_HEAD = r'''
-\documentclass[12pt]{article}
+\documentclass[preview,12pt]{standalone}
 \usepackage[utf8x]{inputenc}
 \usepackage{amsmath}
 \usepackage{amsthm}
@@ -108,7 +108,7 @@ class ImgMathHandler(MathHandler):
 \usepackage{amsfonts}
 \usepackage{anyfontsize}
 \usepackage{bm}
-\pagestyle{empty}
+\usepackage{geometry}
 '''
 
     PREAMBLE = r''
@@ -123,10 +123,11 @@ class ImgMathHandler(MathHandler):
 \usepackage[active]{preview}
 \begin{document}
 \begin{preview}
-\fontsize{%s}{%s}\selectfont %s%%
+\fontsize{%d}{%d}\selectfont %s%%
 \end{preview}
 \end{document}
 '''
+    DOC_BODY_PREVIEW = DOC_BODY
 
     def __init__(self, font_size=FONT_SIZE):
         super().__init__()
@@ -199,6 +200,7 @@ class ImgMathHandler(MathHandler):
         body = self.DOC_BODY if not use_preview else self.DOC_BODY_PREVIEW
 
         if not block:
+            body = rf'\geometry{{paperwidth=100in}}{body}'
             math = '${}$'.format(code)
         else:
             # Very loosely from sphinx.ext.mathbase.wrap_displaymath
@@ -207,7 +209,7 @@ class ImgMathHandler(MathHandler):
 
         latex = [self.DOC_HEAD, self.PREAMBLE]
         latex.append(body % (font_size, int(round(font_size * 1.2)), math))
-        latex = '\n'.join(latex)
+        latex = ''.join(latex)
         shasum = "{}.{}".format(hashlib.sha1(latex.encode('utf-8')).hexdigest(),
                 fmt)
 
@@ -224,7 +226,7 @@ class ImgMathHandler(MathHandler):
 
             if p.returncode != 0:
                 raise ValueError(f"Latex exited with error:\n\nSTDOUT:\n{stdout}\n\n"
-                        "STDERR:\n{stderr}")
+                        f"STDERR:\n{stderr}")
             return stdout
 
         # Do building in a temp directory
@@ -236,7 +238,9 @@ class ImgMathHandler(MathHandler):
             await run_cmd(latex_cmd, tmp)
 
             if fmt == 'png':
-                cmd = ['dvipng', '--width', '--height', '-T', 'tight', 'z9', '-o', 'math.png', 'math.dvi']
+                cmd = ['dvipng', '--width', '--height', '-T', 'tight', 'z9',
+                        '-bg', 'Transparent',
+                        '-o', 'math.png', 'math.dvi']
                 if use_preview:
                     cmd.append('--depth')
                 output = 'math.png'
