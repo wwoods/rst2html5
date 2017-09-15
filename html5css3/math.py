@@ -109,6 +109,7 @@ class ImgMathHandler(MathHandler):
 \usepackage{anyfontsize}
 \usepackage{bm}
 \usepackage{geometry}
+\usepackage{mathtools}
 '''
 
     PREAMBLE = r''
@@ -166,8 +167,10 @@ class ImgMathHandler(MathHandler):
             size, imgdata = await self._render_math(code, block)
             mathtag.attrib['src'] = imgdata
 
-            dim_style = "width:{}mm;height:{}mm".format(size[0] * 0.3528,
-                    size[1] * 0.3528)
+            dim_style = (
+                    f"width:{size[0] * .3528}mm;"
+                    f"height:{size[1] * .3528}mm;"
+                    f"max-width:none;max-height:none;")
             mathtag.attrib['style'] = dim_style
             if container is not None:
                 container.attrib['style'] = "width:{}mm".format(size[0] * 0.3528)
