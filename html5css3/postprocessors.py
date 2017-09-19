@@ -332,7 +332,7 @@ def embed_images(tree, embed=True, params=None):
         d = tempfile.NamedTemporaryFile(suffix='.png', delete=False)
         d.close()
         try:
-            proc = await asyncio.create_subprocess_exec(['inkscape', '-z',
+            proc = await asyncio.create_subprocess_exec(*['inkscape', '-z',
                     '--export-png', d.name, '-d', '150',
                     path], stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE)
@@ -345,6 +345,10 @@ def embed_images(tree, embed=True, params=None):
             os.unlink(d.name)
     async def image_to_data(path):
         lowercase_path = path.lower()
+
+        if lowercase_path.startswith('data:'):
+            # Already data-encoded
+            return path
 
         if lowercase_path.endswith(".png"):
             content_type = "image/png"
@@ -369,9 +373,9 @@ def embed_images(tree, embed=True, params=None):
         tasks = []
         for image in tree.findall(".//img"):
             path = image.attrib['src']
-            async def waiter():
+            async def waiter(image, path):
                 image.set('src', await image_to_data(path))
-            tasks.append(waiter())
+            tasks.append(waiter(image, path))
 
         """
         for style in tree.findall(".//style"):
@@ -389,9 +393,9 @@ def embed_images(tree, embed=True, params=None):
             path = object.attrib['data']
             if path.startswith('data:'): continue
 
-            async def do_encode():
+            async def do_encode(object, path):
                 object.set('data', await image_to_data(path))
-            tasks.append(do_encode())
+            tasks.append(do_encode(object, path))
 
         tasks and await asyncio.wait(tasks)
     # Make an event loop for this plugin
